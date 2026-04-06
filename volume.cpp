@@ -11,10 +11,6 @@
 //
 // BUILD INSTRUCTIONS (see bottom of file for full details):
 //   g++ -o volume_toggle.exe volume_toggle.cpp -lole32 -loleaut32 -luser32
-//
-// LEARNING EXERCISE:
-//   Search for "YOUR CODE HERE" - those are the parts you need to complete!
-//   Each section has hints. The Windows API stuff is already done for you.
 // ============================================================================
 
 // --- Prevent min/max macros from Windows.h clashing with std::min/std::max ---
@@ -39,7 +35,7 @@
 // CONFIGURATION - Feel free to tweak these!
 // ============================================================================
 const float DUCKED_VOLUME   = 0.20f;  // 20% volume when "ducked"
-const int   HOTKEY_ID       = 1;      // ID for our registered hotkey
+const int   HOTKEY_ID       = 1;      // ID for registered hotkey
 const UINT  HOTKEY_MODIFIER = MOD_CONTROL | MOD_SHIFT;  // Ctrl+Shift
 const UINT  HOTKEY_KEY      = 'M';    // + M key
 
@@ -56,10 +52,10 @@ struct AudioSession {
 
 // Holds the state for our volume toggle
 struct ToggleState {
-    DWORD targetProcessId;       // Which process we're controlling
-    std::string targetName;      // Friendly name for display
-    float originalVolume;        // Volume before we ducked it
-    bool  isDucked;              // Are we currently in "ducked" mode?
+    DWORD targetProcessId;
+    std::string targetName;
+    float originalVolume;
+    bool  isDucked;
 };
 
 // ============================================================================
@@ -75,7 +71,6 @@ std::string wideToNarrow(const std::wstring& wide) {
 
 // ============================================================================
 // HELPER: Get process name from PID
-// (This is a common Windows programming pattern - study it!)
 // ============================================================================
 std::string getProcessName(DWORD pid) {
     if (pid == 0) return "[System Sounds]";
@@ -104,7 +99,6 @@ std::string getProcessName(DWORD pid) {
 // WINDOWS AUDIO API: Enumerate all audio sessions
 // ----------------------------------------------------------------------------
 // This is the "heavy lifting" part using COM and the Core Audio API.
-// You don't need to modify this, but reading through it is educational!
 //
 // The chain of interfaces:
 //   IMMDeviceEnumerator -> IMMDevice (default speaker)
@@ -381,7 +375,6 @@ float getProcessVolume(DWORD targetPid) {
 
 // ============================================================================
 // DISPLAY: Show the list of audio sessions to the user
-// (This one's done for you as a freebie!)
 // ============================================================================
 void displaySessions(const std::vector<AudioSession>& sessions) {
     std::cout << "\n";
@@ -403,19 +396,6 @@ void displaySessions(const std::vector<AudioSession>& sessions) {
     }
     std::cout << "\n";
 }
-
-
-// ############################################################################
-//
-//   YOUR CODE STARTS HERE!  (The fun part)
-//
-//   The Windows API functions you'll need are already implemented above:
-//     - enumerateAudioSessions()  -> returns vector<AudioSession>
-//     - setProcessVolume(pid, vol) -> sets volume (0.0 to 1.0), returns bool
-//     - getProcessVolume(pid)      -> returns current volume (0.0 to 1.0)
-//     - displaySessions(sessions)  -> prints the session list
-//
-// ############################################################################
 
 
 // ============================================================================
@@ -472,130 +452,76 @@ void toggleVolume(ToggleState& state) {
 
 
 // ============================================================================
-// EXERCISE 3: The main function - tie it all together!
+// TODO 3: The main function
 // ============================================================================
 // GOAL: Initialize COM, enumerate sessions, let the user pick an app,
 //       register a hotkey, and run a message loop that calls toggleVolume
 //       when the hotkey is pressed.
-//
-// HINTS:
-//   - COM is initialized with: CoInitializeEx(nullptr, COINIT_MULTITHREADED)
-//   - Don't forget to CoUninitialize() before returning!
-//   - Use enumerateAudioSessions() to get the list
-//   - Use getUserChoice() to let the user pick
-//   - Initialize a ToggleState struct with the chosen app's info
-//   - Register the hotkey with:
-//       RegisterHotKey(nullptr, HOTKEY_ID, HOTKEY_MODIFIER, HOTKEY_KEY)
-//   - The message loop pattern for hotkeys:
-//       MSG msg;
-//       while (GetMessage(&msg, nullptr, 0, 0)) {
-//           if (msg.message == WM_HOTKEY && msg.wParam == HOTKEY_ID) {
-//               // hotkey was pressed!
-//           }
-//       }
-//   - Clean up: UnregisterHotKey(nullptr, HOTKEY_ID) and CoUninitialize()
-//   - Return 0 on success, 1 on failure
-//
-//   BONUS CHALLENGE:
-//     After picking an app, print something fun like:
-//       "Monitoring [AppName]. Press Ctrl+Shift+M to toggle volume!"
-//       "Press Ctrl+C in this window to quit."
-//
+
 int main() {
 
-    // ===================== YOUR CODE HERE =====================
+    // Step 1: Initialize COM (required for all Windows Audio API calls)
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(hr)) {
+        std::cerr << "  Failed to initialize COM (0x"
+                  << std::hex << hr << ")\n";
+        return 1;
+    }
 
-    // Step 1: Initialize COM
-    //   HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    //   If FAILED(hr), print error and return 1
+    // Step 2: Welcome banner
+    std::cout << "\n";
+    std::cout << "  =============================================\n";
+    std::cout << "     Volume Hotkey v1.0\n";
+    std::cout << "     Per-App Volume Toggle for Windows\n";
+    std::cout << "  =============================================\n";
 
-    // Step 2: Print a welcome banner (make it look cool!)
-    //   e.g. "=== Volume Toggle Hotkey v1.0 ==="
-
-    // Step 3: Get the list of audio sessions
-    //   auto sessions = enumerateAudioSessions();
+    // Step 3: Enumerate audio sessions
+    auto sessions = enumerateAudioSessions();
 
     // Step 4: Let the user pick an app
-    //   int choice = getUserChoice(sessions);
-    //   If choice == -1, clean up and return 1
+    int choice = getUserChoice(sessions);
+    if (choice == -1) {
+        std::cerr << "  No valid app selected. Exiting.\n";
+        CoUninitialize();
+        return 1;
+    }
 
-    // Step 5: Set up the ToggleState struct
-    //   - targetProcessId = sessions[choice].processId
-    //   - targetName = sessions[choice].processName
-    //   - originalVolume = sessions[choice].currentVolume
-    //   - isDucked = false
+    // Step 5: Initialize toggle state from the chosen session
+    ToggleState state;
+    state.targetProcessId = sessions[choice].processId;
+    state.targetName      = sessions[choice].processName;
+    state.originalVolume  = sessions[choice].currentVolume;
+    state.isDucked        = false;
 
-    // Step 6: Register the global hotkey
-    //   if (!RegisterHotKey(nullptr, HOTKEY_ID, HOTKEY_MODIFIER, HOTKEY_KEY))
-    //     -> print error, clean up, return 1
+    // Step 6: Register the global hotkey (Ctrl+Shift+M)
+    if (!RegisterHotKey(nullptr, HOTKEY_ID, HOTKEY_MODIFIER, HOTKEY_KEY)) {
+        std::cerr << "  Failed to register hotkey! Is another instance running?\n";
+        CoUninitialize();
+        return 1;
+    }
 
-    // Step 7: Print instructions to the user
-    //   Tell them the hotkey and how to quit
+    // Step 7: Print instructions
+    std::cout << "\n";
+    std::cout << "  Targeting: " << state.targetName
+              << " (PID " << state.targetProcessId << ")\n";
+    std::cout << "  Hotkey:    Ctrl+Shift+M  (toggles "
+              << static_cast<int>(DUCKED_VOLUME * 100) << "% <-> original)\n";
+    std::cout << "\n";
+    std::cout << "  Listening for hotkey... (close this window to quit)\n";
+    std::cout << "  -------------------------------------------------\n";
 
-    // Step 8: Run the message loop
-    //   MSG msg;
-    //   while (GetMessage(&msg, nullptr, 0, 0)) {
-    //       if the message is WM_HOTKEY with our HOTKEY_ID:
-    //           call toggleVolume(state)
-    //   }
+    // Step 8: Windows message loop - waits for hotkey events
+    // GetMessage blocks until a message arrives, so this uses zero CPU while idle.
+    MSG msg;
+    while (GetMessage(&msg, nullptr, 0, 0)) {
+        if (msg.message == WM_HOTKEY && msg.wParam == HOTKEY_ID) {
+            toggleVolume(state);
+        }
+    }
 
     // Step 9: Clean up
-    //   UnregisterHotKey(nullptr, HOTKEY_ID);
-    //   CoUninitialize();
+    UnregisterHotKey(nullptr, HOTKEY_ID);
+    CoUninitialize();
 
     return 0;
-
-    // ==========================================================
 }
-
-
-// ############################################################################
-//
-//   BUILD & RUN INSTRUCTIONS
-//
-//   OPTION 1: MinGW (g++ from MSYS2 or standalone MinGW-w64)
-//   -----------------------------------------------------------
-//   Open a terminal and run:
-//     g++ -o volume_toggle.exe volume_toggle.cpp -lole32 -loleaut32 -luser32
-//
-//   Then run:
-//     ./volume_toggle.exe
-//
-//
-//   OPTION 2: Microsoft Visual Studio (MSVC)
-//   -----------------------------------------------------------
-//   1. Open "Developer Command Prompt for VS"
-//   2. Run:
-//        cl /EHsc volume_toggle.cpp ole32.lib oleaut32.lib user32.lib
-//   3. Run:
-//        volume_toggle.exe
-//
-//
-//   OPTION 3: Visual Studio IDE
-//   -----------------------------------------------------------
-//   1. Create a new "Console App" project
-//   2. Replace the generated .cpp with this file
-//   3. Build and run (Ctrl+F5)
-//   (The required libs ole32, oleaut32, user32 are linked by default)
-//
-//
-//   OPTION 4: VSCode with CMake
-//   -----------------------------------------------------------
-//   Create a CMakeLists.txt with:
-//     cmake_minimum_required(VERSION 3.10)
-//     project(VolumeToggle)
-//     add_executable(volume_toggle volume_toggle.cpp)
-//     target_link_libraries(volume_toggle ole32 oleaut32 user32)
-//
-//
-//   IMPORTANT NOTES:
-//   - You MUST run the .exe as a normal user (NOT as Administrator)
-//     unless you specifically need to control an elevated process.
-//   - The program only sees apps that are currently playing audio.
-//     Make sure your game/app is producing sound before launching!
-//   - This uses standard Windows APIs (Core Audio + RegisterHotKey).
-//     It does NOT inject into processes, hook DLLs, or do anything
-//     that would trigger anti-cheat software.
-//   - Works on Windows 10 and 11, any user account, any language.
-//
-// ############################################################################
