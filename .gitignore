@@ -1,0 +1,11 @@
+# Compiled binary
+*.exe
+
+# User config
+volume_hotkey.ini
+
+# Build artifacts
+*.obj
+*.o
+*.pdb
+*.ilk
